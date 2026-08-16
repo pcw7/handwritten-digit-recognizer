@@ -18,7 +18,7 @@ model = load(MODEL_PATH)
 scaler = load(SCALER_PATH)
 
 
-def preprocess(image: Image.Image) -> np.ndarray:
+def build_mnist_frame(image: Image.Image) -> Image.Image:
     # Match the original MNIST construction: crop to the drawn strokes,
     # fit into a 20x20 box preserving aspect ratio, then center the result
     # in a 28x28 frame by center of mass. A plain full-canvas resize leaves
@@ -46,9 +46,16 @@ def preprocess(image: Image.Image) -> np.ndarray:
     paste_x = round(MNIST_SIZE / 2 - com_x)
     paste_y = round(MNIST_SIZE / 2 - com_y)
     frame.paste(resized, (paste_x, paste_y))
+    return frame
 
-    arr = np.array(frame, dtype=np.float32).reshape(1, -1)
-    return scaler.transform(arr)
+
+def frame_to_data_url(frame: Image.Image) -> str:
+    # Upscale with nearest-neighbor so individual MNIST pixels stay visible
+    # ("pixelated" look) instead of being blurred by interpolation.
+    preview = frame.resize((MNIST_SIZE * 5, MNIST_SIZE * 5), Image.NEAREST)
+    buffer = io.BytesIO()
+    preview.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
 
 
 @app.route("/")
@@ -69,12 +76,15 @@ def predict():
     if image.getbbox() is None:
         return jsonify({"error": "empty_canvas"}), 400
 
-    features = preprocess(image)
-    probs = model.predict_proba(features)[0]
-    digit = int(np.argmax(probs))
-    confidence = float(probs[digit] * 100)
+    frame = build_mnist_frame(image)
+    arr = np.array(frame, dtype=np.float32).reshape(1, -1)
+    features = scaler.transform(arr)
 
-    return jsonify({"digit": digit, "confidence": confidence})
+    probs = model.predict_proba(features)[0]
+    top_indices = np.argsort(probs)[::-1][:3]
+    top = [{"digit": int(i), "confidence": float(probs[i] * 100)} for i in top_indices]
+
+    return jsonify({"top": top, "preview": frame_to_data_url(frame)})
 
 
 if __name__ == "__main__":

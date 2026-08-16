@@ -16,6 +16,7 @@
     --text-primary: #202124;
     --text-secondary: #5f6368;
     --border-color: #dadce0;
+    --track-bg: #f1f3f4;
   }
   * { box-sizing: border-box; }
   body {
@@ -25,7 +26,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 64px;
+    padding: 64px 16px;
     margin: 0;
   }
   h1 {
@@ -45,6 +46,13 @@
     font-size: 16px;
     margin: 12px 0 32px;
   }
+  .layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
   .card {
     background: #fff;
     border: 1px solid var(--border-color);
@@ -61,17 +69,10 @@
     cursor: crosshair;
     touch-action: none;
   }
-  #result {
-    font-size: 22px;
-    font-weight: 500;
-    margin: 24px 0 8px;
-    min-height: 30px;
-    color: var(--text-primary);
-  }
-  #result .confidence {
-    color: var(--text-secondary);
-    font-weight: 400;
-    font-size: 16px;
+  .buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
   }
   button {
     font-family: inherit;
@@ -82,7 +83,6 @@
     border: 1px solid var(--border-color);
     border-radius: 20px;
     padding: 10px 24px;
-    margin-top: 8px;
     cursor: pointer;
     transition: background 0.2s, box-shadow 0.2s;
   }
@@ -90,8 +90,83 @@
     background: #f8f9fa;
     box-shadow: 0 1px 3px rgba(32, 33, 36, 0.2);
   }
+  button:disabled {
+    color: var(--text-secondary);
+    cursor: default;
+    opacity: 0.5;
+  }
+  .results-card {
+    width: 280px;
+    min-height: 280px;
+    justify-content: flex-start;
+  }
+  .results-card h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+    align-self: flex-start;
+  }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  .bar-digit {
+    font-size: 18px;
+    font-weight: 700;
+    width: 16px;
+    text-align: center;
+  }
+  .bar-track {
+    flex: 1;
+    height: 10px;
+    background: var(--track-bg);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    background: var(--track-bg);
+    transition: width 0.3s ease;
+  }
+  .bar-row.rank-0 .bar-fill { background: var(--google-blue); }
+  .bar-row.rank-1 .bar-fill { background: var(--google-green); }
+  .bar-row.rank-2 .bar-fill { background: var(--google-yellow); }
+  .bar-pct {
+    font-size: 13px;
+    color: var(--text-secondary);
+    width: 46px;
+    text-align: right;
+  }
+  .preview-section {
+    margin-top: 24px;
+    width: 100%;
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+  }
+  #preview {
+    width: 112px;
+    height: 112px;
+    image-rendering: pixelated;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #000;
+    display: block;
+    margin: 0 auto;
+  }
+  .placeholder {
+    color: var(--text-secondary);
+    font-size: 14px;
+    text-align: center;
+    width: 100%;
+    margin-top: 40px;
+  }
   footer {
-    margin: 32px 0;
+    margin: 32px 0 0;
     color: var(--text-secondary);
     font-size: 13px;
   }
@@ -101,10 +176,23 @@
   <h1><span>손</span><span>글</span><span>씨</span><span> 숫</span><span>자</span><span> 인식</span></h1>
   <p class="subtitle">마우스나 손가락으로 0~9 사이의 숫자를 그려보세요</p>
 
-  <div class="card">
-    <canvas id="canvas" width="280" height="280"></canvas>
-    <div id="result">숫자를 그려주세요</div>
-    <button id="clearBtn">지우기</button>
+  <div class="layout">
+    <div class="card">
+      <canvas id="canvas" width="280" height="280"></canvas>
+      <div class="buttons">
+        <button id="undoBtn" disabled>실행취소</button>
+        <button id="clearBtn">지우기</button>
+      </div>
+    </div>
+
+    <div class="card results-card">
+      <h3>예측 결과 (상위 3개)</h3>
+      <div id="bars"><div class="placeholder">숫자를 그리면 결과가 여기에 표시됩니다</div></div>
+      <div class="preview-section" id="previewSection" style="display:none;">
+        <h3>모델이 보는 이미지 (28x28)</h3>
+        <img id="preview" alt="전처리된 28x28 이미지">
+      </div>
+    </div>
   </div>
 
   <footer>손으로 그린 숫자를 놓는 즉시 자동으로 인식합니다</footer>
@@ -112,7 +200,10 @@
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-const resultEl = document.getElementById("result");
+const barsEl = document.getElementById("bars");
+const previewSection = document.getElementById("previewSection");
+const previewImg = document.getElementById("preview");
+const undoBtn = document.getElementById("undoBtn");
 
 ctx.fillStyle = "#000";
 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -124,7 +215,9 @@ ctx.lineJoin = "round";
 let drawing = false;
 let lastX = 0;
 let lastY = 0;
-let hasInk = false;
+let strokeSnapshotTaken = false;
+const MAX_HISTORY = 20;
+const history = [];
 
 function getPos(evt) {
   const rect = canvas.getBoundingClientRect();
@@ -135,9 +228,24 @@ function getPos(evt) {
   };
 }
 
+function hasCanvasInk() {
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] > 10) return true;
+  }
+  return false;
+}
+
+function pushHistory() {
+  history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  if (history.length > MAX_HISTORY) history.shift();
+  undoBtn.disabled = false;
+}
+
 function startDraw(evt) {
   evt.preventDefault();
   drawing = true;
+  strokeSnapshotTaken = false;
   const pos = getPos(evt);
   lastX = pos.x;
   lastY = pos.y;
@@ -146,6 +254,10 @@ function startDraw(evt) {
 function moveDraw(evt) {
   if (!drawing) return;
   evt.preventDefault();
+  if (!strokeSnapshotTaken) {
+    pushHistory();
+    strokeSnapshotTaken = true;
+  }
   const pos = getPos(evt);
   ctx.beginPath();
   ctx.moveTo(lastX, lastY);
@@ -153,14 +265,13 @@ function moveDraw(evt) {
   ctx.stroke();
   lastX = pos.x;
   lastY = pos.y;
-  hasInk = true;
 }
 
 function endDraw(evt) {
   if (!drawing) return;
   evt.preventDefault();
   drawing = false;
-  if (hasInk) {
+  if (strokeSnapshotTaken) {
     predict();
   }
 }
@@ -174,16 +285,35 @@ canvas.addEventListener("touchstart", startDraw);
 canvas.addEventListener("touchmove", moveDraw);
 canvas.addEventListener("touchend", endDraw);
 
+function resetResults() {
+  barsEl.innerHTML = '<div class="placeholder">숫자를 그리면 결과가 여기에 표시됩니다</div>';
+  previewSection.style.display = "none";
+}
+
 document.getElementById("clearBtn").addEventListener("click", () => {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  hasInk = false;
-  resultEl.textContent = "숫자를 그려주세요";
+  history.length = 0;
+  undoBtn.disabled = true;
+  resetResults();
+});
+
+undoBtn.addEventListener("click", () => {
+  if (history.length === 0) return;
+  const snapshot = history.pop();
+  ctx.putImageData(snapshot, 0, 0);
+  if (history.length === 0) undoBtn.disabled = true;
+
+  if (hasCanvasInk()) {
+    predict();
+  } else {
+    resetResults();
+  }
 });
 
 async function predict() {
   const dataUrl = canvas.toDataURL("image/png");
-  resultEl.textContent = "인식 중...";
+  barsEl.innerHTML = '<div class="placeholder">인식 중...</div>';
   try {
     const res = await fetch("/predict", {
       method: "POST",
@@ -192,13 +322,30 @@ async function predict() {
     });
     const data = await res.json();
     if (data.error) {
-      resultEl.textContent = "숫자를 먼저 그려주세요";
+      resetResults();
       return;
     }
-    resultEl.innerHTML = `예측 결과: <b>${data.digit}</b> <span class="confidence">(신뢰도 ${data.confidence.toFixed(1)}%)</span>`;
+    renderResults(data);
   } catch (err) {
-    resultEl.textContent = "인식에 실패했습니다";
+    barsEl.innerHTML = '<div class="placeholder">인식에 실패했습니다</div>';
   }
+}
+
+function renderResults(data) {
+  barsEl.innerHTML = "";
+  data.top.forEach((item, rank) => {
+    const row = document.createElement("div");
+    row.className = `bar-row rank-${rank}`;
+    row.innerHTML = `
+      <span class="bar-digit">${item.digit}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${item.confidence}%"></div></div>
+      <span class="bar-pct">${item.confidence.toFixed(1)}%</span>
+    `;
+    barsEl.appendChild(row);
+  });
+
+  previewImg.src = data.preview;
+  previewSection.style.display = "block";
 }
 </script>
 </body>
