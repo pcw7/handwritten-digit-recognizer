@@ -1,0 +1,13 @@
+# Created: 2026-08-16 22:25
+__pycache__/
+*.pyc
+
+# Raw MNIST cache - large and regenerable by running train_model.py
+mnist_data/
+
+# Flask instance/local files
+.flaskenv
+instance/
+
+# Local Claude Code state
+.claude/
